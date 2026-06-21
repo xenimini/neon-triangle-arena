@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NEON TRIANGLE ARENA</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div id="loading" class="loading">
+    <div class="spinner"></div>
+    <p>Загрузка НЕОНОВОЙ АРЕНЫ...</p>
+  </div>
+<div id="name-modal" class="modal">
+  <div class="modal-content">
+    <h2>Добро пожаловать в NEON ARENA</h2>
+    <input type="text" id="name-input" placeholder="Твоё имя" maxlength="16">
+    <button id="start-game">ИГРАТЬ</button>
+  </div>
+</div>
+  <div id="game-container"></div>
+  
+  <div id="ui-overlay">
+    <div id="player-info">
+      <span id="username"></span>
+      <span id="score">СЧЁТ: 0</span>
+      <span id="hp">HP: 100</span>
+    </div>
+    
+    <div id="chat-container" class="hidden">
+      <div id="chat-messages"></div>
+      <div id="chat-input-container">
+        <input type="text" id="chat-input" placeholder="Сообщение...">
+        <button id="chat-send">➤</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
