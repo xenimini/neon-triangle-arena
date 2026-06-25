@@ -13,26 +13,42 @@ const io = new Server(server, {
 app.use(cors());
 app.get('/', (req, res) => res.send('NEON ARENA - OK'));
 
+const players = new Map(); // ← храним всех игроков
+
 io.on('connection', (socket) => {
   console.log(`🟢 Игрок подключился: ${socket.id}`);
 
   socket.on('join-game', (userData) => {
     socket.username = userData.username;
-    socket.playerId = userData.id;
     socket.join('arena');
+
+    players.set(socket.id, {
+      id: socket.id,
+      username: userData.username
+    });
 
     console.log(`👤 ${userData.username} вошёл в игру`);
 
-    // Отправляем данные о комнате
+    // Отправляем текущему игроку ВСЕХ игроков в комнате
     socket.emit('room-joined', {
-      players: [{ id: socket.id, username: userData.username }]
+      players: Array.from(players.values())
     });
 
-    // Уведомляем остальных
+    // Уведомляем остальных о новом игроке
     socket.to('arena').emit('player-joined', {
       id: socket.id,
       username: userData.username
     });
+  });
+
+  socket.on('chat-message', (text) => {
+    if (!socket.username) return;
+    const message = {
+      username: socket.username,
+      text: text,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+    io.to('arena').emit('new-chat-message', message);
   });
 
   socket.on('player-move', (data) => {
@@ -45,6 +61,7 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     console.log(`🔴 ${socket.username || socket.id} отключился`);
+    players.delete(socket.id);
     io.to('arena').emit('player-left', { id: socket.id });
   });
 });

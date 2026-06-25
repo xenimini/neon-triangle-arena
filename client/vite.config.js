@@ -10,13 +10,8 @@ export default defineConfig({
         ws: true,
         changeOrigin: true,
         secure: false,
-        timeout: 60000,
-        proxyTimeout: 60000,
-      },
-      '/api': {
-        target: 'http://localhost:3000',
-        changeOrigin: true,
-        secure: false,
+        timeout: 0,
+        proxyTimeout: 0
       }
     }
   }

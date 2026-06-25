@@ -2,30 +2,24 @@ import { Game } from './Game.js';
 
 document.addEventListener('DOMContentLoaded', () => {
   const loading = document.getElementById('loading');
-  
-  let username = localStorage.getItem('username') || 
-                 prompt('Введите имя для игры:') || 
-                 'Игрок' + Math.floor(Math.random() * 9999);
+  const nameModal = document.getElementById('name-modal');
+  const nameInput = document.getElementById('name-input');
+  const startBtn = document.getElementById('start-game');
 
-  localStorage.setItem('username', username);
+  nameInput.value = localStorage.getItem('username') || '';
 
-  console.log(`✅ Игрок: ${username}`);
+  startBtn.addEventListener('click', () => {
+    let username = nameInput.value.trim();
+    if (!username) username = 'Игрок' + Math.floor(Math.random() * 9999);
 
-  const game = new Game();
-  
-  // Временный хак — запускаем игру даже без сети
-  setTimeout(() => {
-    if (loading) loading.style.display = 'none';
-    
-    // Имитируем успешное подключение
-    game.localPlayerId = 'local';
-    const fakeData = {
-      players: [{ id: 'local', username: username }]
-    };
-    if (game.network.callbacks.onRoomJoined) {
-      game.network.callbacks.onRoomJoined(fakeData);
-    }
-  }, 800);
+    localStorage.setItem('username', username);
 
-  game.start({ id: 'local', username: username });
+    nameModal.style.display = 'none';
+    loading.style.display = 'flex';
+
+    const game = new Game();
+    game.start({ username });
+  });
+
+  nameModal.style.display = 'flex';
 });

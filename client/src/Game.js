@@ -14,6 +14,7 @@ export class Game {
     this.players = new Map();
     this.coins = new Map();
     this.obstacles = new Map();
+    
     this.localPlayerId = null;
     this.cameraAngle = Math.PI / 4;
     this.cameraDistance = 22;
@@ -49,17 +50,6 @@ export class Game {
     window.addEventListener('resize', () => this._onWindowResize());
   }
 
-  _setupCameraControls() {
-    const canvas = this.renderer.domElement;
-    canvas.addEventListener('click', () => canvas.requestPointerLock());
-
-    window.addEventListener('mousemove', (e) => {
-      if (document.pointerLockElement === canvas) {
-        this.cameraAngle -= e.movementX * 0.0035;
-      }
-    });
-  }
-
   _initManagers() {
     this.input = new InputManager();
     this.network = new NetworkManager();
@@ -71,22 +61,58 @@ export class Game {
     this.arena.addToScene(this.scene);
   }
 
+  _setupCameraControls() {
+    const canvas = this.renderer.domElement;
+    canvas.addEventListener('click', () => canvas.requestPointerLock());
+
+    window.addEventListener('mousemove', (e) => {
+      if (document.pointerLockElement === canvas) {
+        this.cameraAngle -= e.movementX * 0.0035;
+      }
+    });
+  }
+
   _setupNetworkCallbacks() {
     this.network.callbacks.onRoomJoined = (data) => {
-      this.localPlayerId = this.network.socket.id;
-      const localData = data.players.find(p => p.id === this.localPlayerId);
-
-      document.getElementById('username').textContent = `👤 ${localData.username}`;
+      this.localPlayerId = this.network.socket?.id || 'local';
+      
       document.getElementById('loading').style.display = 'none';
 
-      const localPlayer = new Player(localData.id, localData.username, 0x00ffff, true);
-      localPlayer.addToScene(this.scene);
-      this.players.set(localData.id, localPlayer);
+      // Создаём всех игроков
+      data.players.forEach(p => {
+        if (!this.players.has(p.id)) {
+          const color = p.id === this.localPlayerId ? 0x00ffff : 0xff00ff;
+          const player = new Player(p.id, p.username, color, p.id === this.localPlayerId);
+          player.addToScene(this.scene);
+          this.players.set(p.id, player);
+        }
+      });
+
+      const localPlayer = this.players.get(this.localPlayerId);
+      if (localPlayer) {
+        document.getElementById('username').textContent = `👤 ${localPlayer.username}`;
+      }
+    };
+
+    this.network.callbacks.onPlayerJoined = (playerData) => {
+      if (this.players.has(playerData.id)) return;
+      
+      const newPlayer = new Player(playerData.id, playerData.username, 0xff00ff, false);
+      newPlayer.addToScene(this.scene);
+      this.players.set(playerData.id, newPlayer);
     };
 
     this.network.callbacks.onPlayerMoved = (data) => {
       const player = this.players.get(data.id);
       if (player) player.updatePosition(data.position, data.rotation);
+    };
+
+    this.network.callbacks.onPlayerLeft = (data) => {
+      const player = this.players.get(data.id);
+      if (player) {
+        this.scene.remove(player.mesh);
+        this.players.delete(data.id);
+      }
     };
   }
 
@@ -97,39 +123,43 @@ export class Game {
 
   _animate() {
     requestAnimationFrame(() => this._animate());
-    const delta = this.clock.getDelta();
     const localPlayer = this.players.get(this.localPlayerId);
 
     if (localPlayer) {
-      // Движение
-      let moved = false;
-      const speed = SCENE_CONFIG.playerSpeed || 0.25;
-      let pos = localPlayer.mesh.position.clone();
-
-      if (this.input.isKeyDown('KeyW') || this.input.isKeyDown('ArrowUp')) { pos.z -= speed; moved = true; }
-      if (this.input.isKeyDown('KeyS') || this.input.isKeyDown('ArrowDown')) { pos.z += speed; moved = true; }
-      if (this.input.isKeyDown('KeyA') || this.input.isKeyDown('ArrowLeft')) { pos.x -= speed; moved = true; }
-      if (this.input.isKeyDown('KeyD') || this.input.isKeyDown('ArrowRight')) { pos.x += speed; moved = true; }
-
-      const half = SCENE_CONFIG.arenaSize / 2 - 2;
-      pos.x = Math.max(-half, Math.min(half, pos.x));
-      pos.z = Math.max(-half, Math.min(half, pos.z));
-
-      if (moved) {
-        const rotationY = Math.atan2(pos.x - localPlayer.mesh.position.x, pos.z - localPlayer.mesh.position.z);
-        localPlayer.updatePosition(pos, { y: rotationY });
-        this.network.sendMove(pos, { y: rotationY });
-      }
-
-      // Камера
-      const p = localPlayer.mesh.position;
-      this.camera.position.x = p.x + Math.sin(this.cameraAngle) * this.cameraDistance;
-      this.camera.position.z = p.z + Math.cos(this.cameraAngle) * this.cameraDistance;
-      this.camera.position.y = p.y + this.cameraHeight;
-      this.camera.lookAt(p.x, p.y + 2, p.z);
+      this._handleLocalMovement(localPlayer);
+      this._updateCamera(localPlayer);
     }
 
     this.renderer.render(this.scene, this.camera);
+  }
+
+  _handleLocalMovement(localPlayer) {
+    let moved = false;
+    const speed = SCENE_CONFIG.playerSpeed || 0.25;
+    let pos = localPlayer.mesh.position.clone();
+
+    if (this.input.isKeyDown('KeyW') || this.input.isKeyDown('ArrowUp')) { pos.z -= speed; moved = true; }
+    if (this.input.isKeyDown('KeyS') || this.input.isKeyDown('ArrowDown')) { pos.z += speed; moved = true; }
+    if (this.input.isKeyDown('KeyA') || this.input.isKeyDown('ArrowLeft')) { pos.x -= speed; moved = true; }
+    if (this.input.isKeyDown('KeyD') || this.input.isKeyDown('ArrowRight')) { pos.x += speed; moved = true; }
+
+    const half = SCENE_CONFIG.arenaSize / 2 - 2;
+    pos.x = Math.max(-half, Math.min(half, pos.x));
+    pos.z = Math.max(-half, Math.min(half, pos.z));
+
+    if (moved) {
+      const rotationY = Math.atan2(pos.x - localPlayer.mesh.position.x, pos.z - localPlayer.mesh.position.z);
+      localPlayer.updatePosition(pos, { y: rotationY });
+      this.network.sendMove(pos, { y: rotationY });
+    }
+  }
+
+  _updateCamera(localPlayer) {
+    const p = localPlayer.mesh.position;
+    this.camera.position.x = p.x + Math.sin(this.cameraAngle) * this.cameraDistance;
+    this.camera.position.z = p.z + Math.cos(this.cameraAngle) * this.cameraDistance;
+    this.camera.position.y = p.y + this.cameraHeight;
+    this.camera.lookAt(p.x, p.y + 2, p.z);
   }
 
   _onWindowResize() {

@@ -9,24 +9,34 @@ export class NetworkManager {
       onPlayerJoined: null,
       onPlayerLeft: null,
       onPlayerMoved: null,
-      onCoinCollected: null,
-      onHitByObstacle: null,
       onNewChatMessage: null,
     };
   }
 
   connect(userData) {
+    console.log(`🔌 Пытаюсь подключиться к ${SOCKET_URL}`);
+
     this.socket = io(SOCKET_URL, {
       reconnection: true,
       reconnectionAttempts: 5,
-      timeout: 10000
+      timeout: 10000,
+      transports: ['polling', 'websocket']
     });
 
     this.socket.on('connect', () => {
-      console.log('✅ Подключено к серверу');
+      console.log('✅ Подключено к серверу!');
       this.socket.emit('join-game', userData);
     });
 
+    this.socket.on('connect_error', (err) => {
+      console.error('❌ Ошибка подключения:', err.message);
+    });
+
+    this.socket.on('disconnect', () => {
+      console.warn('🔴 Отключено от сервера');
+    });
+
+    // Остальные обработчики
     this.socket.on('room-joined', (data) => {
       if (this.callbacks.onRoomJoined) this.callbacks.onRoomJoined(data);
     });
@@ -46,27 +56,14 @@ export class NetworkManager {
     this.socket.on('new-chat-message', (msg) => {
       if (this.callbacks.onNewChatMessage) this.callbacks.onNewChatMessage(msg);
     });
-
-    // Новые события для монет и препятствий
-    this.socket.on('coin-collected', (data) => {
-      if (this.callbacks.onCoinCollected) this.callbacks.onCoinCollected(data);
-    });
-
-    this.socket.on('hit-by-obstacle', (data) => {
-      if (this.callbacks.onHitByObstacle) this.callbacks.onHitByObstacle(data);
-    });
   }
 
   sendMove(position, rotation) {
-    if (this.socket?.connected) {
-      this.socket.emit('player-move', { position, rotation });
-    }
+    if (this.socket?.connected) this.socket.emit('player-move', { position, rotation });
   }
 
   sendMessage(message) {
-    if (this.socket?.connected) {
-      this.socket.emit('chat-message', message);
-    }
+    if (this.socket?.connected) this.socket.emit('chat-message', message);
   }
 
   disconnect() {
